@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
-"""Hindsight API Bearer-auth reverse proxy (Space A front door).
-Hindsight OSS API (0.8.x) has NO built-in auth; this proxy sits on :7860 and
-requires `Authorization: Bearer <HINDSIGHT_AUTH_TOKEN>` for everything except
-/health and /metrics (kept open for HF Spaces health-check), then forwards to
-the real API on 127.0.0.1:8888.
+"""Hindsight API Bearer-auth reverse proxy (front door).
+
+Hindsight OSS API (0.8.x) has NO built-in auth; this proxy sits on the
+listen port and requires `Authorization: Bearer <HINDSIGHT_AUTH_TOKEN>`
+for everything except /health and /metrics, then forwards to the real API
+on 127.0.0.1:<HINDSIGHT_API_PORT>.
+
+Listen port resolution:
+  1. $PORT (Render injects this; free tier defaults to 10000)
+  2. $AUTH_PROXY_PORT (explicit override)
+  3. 7860 (HF Spaces default)
 """
 import http.client
 import http.server
@@ -14,14 +20,14 @@ BACKEND_HOST = "127.0.0.1"
 BACKEND_PORT = int(os.environ.get("HINDSIGHT_API_PORT", "8888"))
 TOKEN = os.environ.get("HINDSIGHT_AUTH_TOKEN", "")
 OPEN_PREFIXES = ("/health", "/metrics")
-PORT = 7860
+PORT = int(os.environ.get("PORT") or os.environ.get("AUTH_PROXY_PORT") or "7860")
 
 
 class ProxyHandler(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     def _handle(self):
-        # Auth gate (except health/metrics for HF health-check)
+        # Auth gate (except health/metrics for platform health-checks)
         if not self.path.startswith(OPEN_PREFIXES):
             auth = self.headers.get("Authorization", "")
             if auth != f"Bearer {TOKEN}":
