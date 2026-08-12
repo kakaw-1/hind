@@ -1,0 +1,20 @@
+# Hindsight on Render — slim image (no local ML models; external embedding/PG)
+# Architecture: auth_proxy.py (Bearer gate) on $PORT (Render-injected) →
+# hindsight-api on :8888. Slim = 512MB free tier OK, embeddings via external
+# provider (OpenAI-compatible), DB via external PostgreSQL + pgvector.
+FROM ghcr.io/vectorize-io/hindsight:latest-slim
+
+# API stays on its default port; proxy owns $PORT (Render injects; free=10000).
+ENV HINDSIGHT_API_PORT=8888
+ENV HINDSIGHT_ENABLE_CP=false
+
+# Bearer-auth reverse proxy (python3 stdlib, zero deps)
+COPY --chown=1000:1000 auth_proxy.py /app/auth_proxy.py
+# Runtime token: set HINDSIGHT_AUTH_TOKEN in Render env (or build arg).
+ENV HINDSIGHT_AUTH_TOKEN=change-me
+
+COPY --chown=1000:1000 start-render.sh /app/start-render.sh
+RUN chmod +x /app/start-render.sh
+
+EXPOSE 10000
+CMD ["/app/start-render.sh"]
